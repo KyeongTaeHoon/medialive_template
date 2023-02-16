@@ -1,0 +1,149 @@
+Parameters:
+  StreamName1:
+    Type: String
+    Default: my-stream-1
+  StreamName2:
+    Type: String
+    Default: my-stream-2
+
+Resources:
+  RootRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - medialive.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: '*'
+                Resource: '*'
+  RootInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref RootRole
+
+
+  MediaLiveInput1:
+    Type: AWS::MediaLive::Input
+    Properties:
+      Name: my-medialive-input
+      Type: RTMP_PULL
+      InputSecurityGroups:
+        - !Ref InputSecurityGroup
+      Sources:
+        - Url: 'https://d15an60oaeed9r.cloudfront.net/live_stream_v2/sports_reel_with_markers.m3u8'
+        - Url: 'https://d15an60oaeed9r.cloudfront.net/live_stream_v2/sports_reel_with_markers.m3u8'
+
+  MediaLiveChannel:
+    Type: AWS::MediaLive::Channel
+    Properties:
+      Name: my-medialive-channel
+      ChannelClass: STANDARD
+      RoleArn: !GetAtt RootRole.Arn
+           
+      
+      InputAttachments:
+        - InputId: !Ref MediaLiveInput1
+          InputSettings:
+            SourceEndBehavior: LOOP
+          InputAttachmentName: "input-1"
+  
+      EncoderSettings:
+        AudioDescriptions:
+          - Name: audio_1
+            LanguageCodeControl: FOLLOW_INPUT
+            AudioTypeControl: FOLLOW_INPUT
+        OutputGroups:
+          - OutputGroupSettings:
+              MediaPackageGroupSettings:
+                Destination:
+                  DestinationRefId: destination1
+            Outputs:
+              - AudioDescriptionNames:
+                  - audio_1
+                CaptionDescriptionNames: []
+                OutputName: EMPOutput1
+                OutputSettings:
+                  MediaPackageOutputSettings: {}
+                VideoDescriptionName: video_1
+        VideoDescriptions:
+          - CodecSettings:
+              H264Settings:
+                AdaptiveQuantization: MEDIUM
+                AfdSignaling: NONE
+                ColorMetadata: INSERT
+                EntropyEncoding: CABAC
+                FlickerAq: ENABLED
+                ForceFieldPictures: DISABLED
+                FramerateControl: SPECIFIED
+                FramerateDenominator: 1
+                FramerateNumerator: 30
+                GopBReference: DISABLED
+                GopClosedCadence: 1
+                GopNumBFrames: 2
+                GopSize: 90
+                GopSizeUnits: FRAMES
+                Level: H264_LEVEL_AUTO
+                LookAheadRateControl: MEDIUM
+                NumRefFrames: 1
+                ParControl: SPECIFIED
+                ParDenominator: 1
+                ParNumerator: 1
+                Profile: MAIN
+                RateControlMode: CBR
+                ScanType: PROGRESSIVE
+                SceneChangeDetect: ENABLED
+                SpatialAq: ENABLED
+                SubgopLength: FIXED
+                Syntax: DEFAULT
+                TemporalAq: ENABLED
+                TimecodeInsertion: DISABLED
+            Height: 720
+            Name: video_1
+            RespondToAfd: NONE
+            ScalingBehavior: DEFAULT
+            Sharpness: 50
+            Width: 1280
+        TimecodeConfig:
+          Source: EMBEDDED
+      Destinations:
+        - Id: destination1
+          MediaPackageSettings:
+            - ChannelId: my-mediapackage-channel
+
+  InputSecurityGroup:
+    Type: AWS::MediaLive::InputSecurityGroup
+    Properties:
+      WhitelistRules:
+        - Cidr: 0.0.0.0/0
+
+  MediaPackageChannel:
+    Type: AWS::MediaPackage::Channel
+    Properties:
+      Description: My MediaPackage channel
+      Id: my-mediapackage-channel
+
+  MediaPackageHlsEndpoint:
+    Type: AWS::MediaPackage::OriginEndpoint
+    Properties:
+      ChannelId: !Ref MediaPackageChannel
+      Description: My MediaPackage HLS endpoint
+      Id: my-mediapackage-hls-endpoint
+      HlsPackage:
+        SegmentDurationSeconds: 6
+        PlaylistWindowSeconds: 60
+        PlaylistType: EVENT
+
